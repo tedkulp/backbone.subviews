@@ -49,7 +49,8 @@
 
 			if( this.subviews ) {
 				_.each( this.subviews, function( thisSubview ) {
-					thisSubview.remove();
+					if (thisSubview.remove)
+						thisSubview.remove();
 				} );
 
 				delete this.subviews;
@@ -70,6 +71,17 @@
 
 	// ****************** Private utility functions ****************** 
 
+	function _isPromise(view) {
+		return (view && view.promise && view.done);
+	}
+
+	function _renderView(name, view, placeholders) {
+		if (view) {
+			placeholders[ name ].replaceWith( view.$el );
+			view.render();
+		}
+	}
+
 	function _prerender() {
 		if( ! this.subviews ) this.subviews = {};
 
@@ -84,6 +96,7 @@
 	function _postrender() {
 		var _this = this;
 		this.subviewCreators = this.subviewCreators || {};
+		this.placeHolderDivs = this.placeHolderDivs || {};
 
 		// Support subviewCreators as both objects and functions.
 		this.subviewCreators = _.result( this, "subviewCreators" );
@@ -97,6 +110,7 @@
 				newSubview = _this._createSubview( subviewName, thisPlaceHolderDiv );
 				if( newSubview === null ) return;  // subview creators can return null to indicate that the subview should not be created
 				_this.subviews[ subviewName ] = newSubview;
+				_this.placeHolderDivs[ subviewName ] = thisPlaceHolderDiv;
 			}
 			else {
 				// If the subview is already defined, then use the existing subview instead
@@ -106,19 +120,28 @@
 
 				newSubview = _this.subviews[ subviewName ];
 			}
+		});
 
-			thisPlaceHolderDiv.replaceWith( newSubview.$el );
-		} );
+		$.when.apply(this, _.filter(this.subviews, _isPromise)).done(function() {
+			// now that all subviews have been created, render them one at a time, in the
+			// order they occur in the DOM.
+			_.each( _this.subviews, function( thisSubview, subviewName ) {
+				// If it's a promise object, we'll wait for it to resolve to a view
+				// before we render it. We'll also replace the view so we don't have
+				// to resolve the object every time.
+				if (thisSubview && thisSubview.promise && thisSubview.done) {
+					thisSubview.done(function(view) {
+						_this.subviews[ subviewName ] = thisSubview = view;
+						_renderView(subviewName, thisSubview, _this.placeHolderDivs);
+					});
+				} else {
+					_renderView(subviewName, thisSubview, _this.placeHolderDivs);
+				}
+			});
 
-		// Now that all subviews have been created, render them one at a time, in the
-		// order they occur in the DOM.
-		_.each( this.subviews, function( thisSubview ) {
-			thisSubview.render();
-		} );
-
-		// Call this.onSubviewsRendered after everything is done (hook for application defined logic)
-		if( _.isFunction( this.onSubviewsRendered ) ) this.onSubviewsRendered.call( this );
-		if( _.isFunction( this._onSubviewsRendered ) ) this._onSubviewsRendered.call( this ); // depreciated. backwards compatibility for versions < 0.6.
+			if( _.isFunction( _this.onSubviewsRendered ) ) _this.onSubviewsRendered.call( _this );
+			if( _.isFunction( _this._onSubviewsRendered ) ) _this._onSubviewsRendered.call( _this ); // depreciated. backwards compatibility for versions < 0.6.
+		});
 	}
 
 	return Backbone.Subviews;
