@@ -1,5 +1,5 @@
 /*
- * Backbone.Subviews, v0.7.3
+ * Backbone.Subviews, v0.7.3.1
  * Copyright (c)2013-2014 Rotunda Software, LLC.
  * Distributed under MIT license
  * http://github.com/rotundasoftware/backbone.subviews
@@ -78,7 +78,8 @@
 	function _renderView(name, view, placeholders) {
 		if (view) {
 			placeholders[ name ].replaceWith( view.$el );
-			view.render();
+			if (view && view.render)
+				view.render();
 		}
 	}
 
